@@ -13,31 +13,33 @@ class InstanceJoinerRunner < JobRunner
     begin   
       @job.write_output( "Processing record : #{record.id}" ) 
   
-      instances = case record
+      grouped_instances = case record
                     when Resource 
-                      Instance.filter(:resource_id => record.id ).select(:id).map { |r| r[:id] } 
+                      Instance.filter(:resource_id => record.id ).select_hash_groups(:instance_type_id, :id).values
                     else
-                      Instance.filter(:archival_object_id => record.id ).select(:id).map { |r| r[:id] } 
+                      Instance.filter(:archival_object_id => record.id ).select_hash_groups(:instance_type_id, :id).values
                     end
 
-      if instances.length > 1
-        @job.write_output( "Multiple instances found for record : #{record.id}" ) 
-        containers = Container.filter( :instance_id => instances ).limit(3).all
-        master = containers.shift
-        containers.each_with_index do | container, i|
-          pos = i + 2
-          type = "type_#{pos}=".intern
-          indicator = "indicator_#{pos}=".intern
-          
-          master.send( type, container.type_1 )
-          master.send( indicator, container.indicator_1 )
-          container.delete  
+      grouped_instances.each do |instances|
+        if instances.length > 1
+          @job.write_output( "Multiple instances with same type found for record : #{record.id}" ) 
+          containers = Container.filter( :instance_id => instances ).limit(3).all
+          master = containers.shift
+          containers.each_with_index do | container, i|
+            pos = i + 2
+            type = "type_#{pos}=".intern
+            indicator = "indicator_#{pos}=".intern
+            
+            master.send( type, container.type_1 )
+            master.send( indicator, container.indicator_1 )
+            container.delete  
+          end
+          instances.shift 
+          Instance.filter(:id => instances).delete 
+          master.save 
         end
-        instances.shift 
-        Instance.filter(:id => instances).delete 
-        master.save 
       end
-
+      
       record.children.each do |child|
         join_instances(child)
       end
