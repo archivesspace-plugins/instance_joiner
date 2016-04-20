@@ -10,7 +10,6 @@ class InstanceJoinerRunner < JobRunner
   end
 
   def join_instances( record )
-    begin   
       @job.write_output( "Processing record : #{record.id}" ) 
   
       grouped_instances = case record
@@ -25,6 +24,8 @@ class InstanceJoinerRunner < JobRunner
           @job.write_output( "Multiple instances with same type found for record : #{record.id}" ) 
           containers = Container.filter( :instance_id => instances ).limit(3).all
           master = containers.shift
+          containers2delete = []
+          instances2delete = []
           containers.each_with_index do | container, i|
             pos = i + 2
             type = "type_#{pos}=".intern
@@ -32,30 +33,30 @@ class InstanceJoinerRunner < JobRunner
             
             master.send( type, container.type_1 )
             master.send( indicator, container.indicator_1 )
-            container.delete  
+
+            containers2delete << container.id
+            instances2delete << container.instance_id
+          
           end
-          instances.shift 
-          Instance.filter(:id => instances).delete 
+            
           master.save 
+          
+          Container.filter(:id => containers2delete).delete 
+          Instance.filter(:id => instances2delete).delete 
+
         end
       end
       
       record.children.each do |child|
         join_instances(child)
       end
-
-    rescue Exception => e 
-      @job.write_output(e.message)
-      @job.write_output(e.backtrace)
-    end
+  
   end 
   
-
   def run
     super
 
     job_data = @json.job
-
 
     begin
       DB.open( DB.supports_mvcc?, 
@@ -71,16 +72,17 @@ class InstanceJoinerRunner < JobRunner
               join_instances(resource)
             end
 
-            @job.write_output( "Finishing #{target.id}" ) 
           end 
         rescue Exception => e
           terminal_error = e
+          @job.write_output(terminal_error.message)
+          @job.write_output(terminal_error.backtrace)
           raise Sequel::Rollback
         end
       end
     
     rescue
-      terminal_error = $!
+      terminal_error ||= $!
     end
  
     if terminal_error
@@ -93,7 +95,5 @@ class InstanceJoinerRunner < JobRunner
     @job.write_output("done..")
 
   end
-
-
 
 end
