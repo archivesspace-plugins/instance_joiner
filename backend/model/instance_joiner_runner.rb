@@ -11,7 +11,7 @@ class InstanceJoinerRunner < JobRunner
 
   def join_instances( record )
       @job.write_output( "Processing record : #{record.id}" ) 
-  
+      updated_records = [] 
       grouped_instances = case record
                     when Resource 
                       Instance.filter(:resource_id => record.id ).select_hash_groups(:instance_type_id, :id).values
@@ -38,25 +38,32 @@ class InstanceJoinerRunner < JobRunner
             instances2delete << container.instance_id
           
           end
-            
+           
           master.save 
           
           Container.filter(:id => containers2delete).delete 
           Instance.filter(:id => instances2delete).delete 
+          
+          updated_records << case record
+                when Resource
+                  "/repositories/#{@job.repo_id}/resources/#{record.id}"
+                else 
+                  "/repositories/#{@job.repo_id}/archival_objects/#{record.id}"
+                end
+
 
         end
       end
       
       record.children.each do |child|
-        join_instances(child)
+        updated_records += join_instances(child)
       end
-  
+    
+      updated_records
   end 
   
   def run
     super
-
-    job_data = @json.job
 
     begin
       DB.open( DB.supports_mvcc?, 
@@ -66,11 +73,13 @@ class InstanceJoinerRunner < JobRunner
                               :repo_id => @job.repo_id) do  
 
             @job.write_output( "Starting instance joiner job on repo : #{@job.repo_id}" ) 
-            
+            updated_records = []  
             Resource.filter(:repo_id => @job.repo_id).each do | resource | 
               @job.write_output(" working on #{resource.id} ") 
-              join_instances(resource)
+              updated_records += join_instances(resource)
             end
+            
+            @job.record_created_uris(updated_records.uniq) 
 
           end 
         rescue Exception => e
