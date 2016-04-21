@@ -1,4 +1,4 @@
-# ArchivesSpace Barcoder Plugin
+# ArchivesSpace Instance Joiner Plugin
 
 This plugin will take all resource and archival_object records and combine all
 the associated containers with the same instance type together into one single
@@ -24,8 +24,8 @@ branch information added by Github )
 process**. Records will be modified and deleted in bulk, so it's critical that you
 review all your records after running this to ensure that the data is correct.
 
-Logged in as a repository administrator, go to Plugins --> Instance Joiner. 
-Click submit and all the records in the selected repository will be modified.
+* Logged in as a repository administrator, go to Plugins --> Instance Joiner. 
+* Click submit and all the records in the selected repository will be modified.
 
 ## To Uninstall:
 
