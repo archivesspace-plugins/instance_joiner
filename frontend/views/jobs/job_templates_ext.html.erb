@@ -1,0 +1,9 @@
+<% if controller.controller_name == 'jobs' && controller.action_name == 'show' %>
+  <% define_template "instance_joiner_job", jsonmodel_definition(:instance_joiner_job) do |form, job| %>
+
+      <div class="form-group">
+        <%= link_to I18n.t("actions.view"), {:controller => :resolver, :action => :resolve_readonly, :uri => job["ref"]}, :class => "btn btn-xs btn-default" %> 
+      </div>
+
+  <% end %>
+<% end %>

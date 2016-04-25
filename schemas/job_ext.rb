@@ -1,11 +1,5 @@
-JOB_TYPES = [
-             {"type" => "JSONModel(:import_job) object"},
-             {"type" => "JSONModel(:find_and_replace_job) object"},
-             {"type" => "JSONModel(:print_to_pdf_job) object"},
-             {"type" => "JSONModel(:report_job) object"},
-             {"type" => "JSONModel(:container_conversion_job) object"},
-             {"type" => "JSONModel(:instance_joiner_job) object"}
-            ]
+JOB_TYPES ||= []
+JOB_TYPES << {"type" => "JSONModel(:instance_joiner_job) object"}
 
 {
   "job" => {

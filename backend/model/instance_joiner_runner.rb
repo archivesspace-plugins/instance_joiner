@@ -10,9 +10,8 @@ class InstanceJoinerRunner < JobRunner
   end
 
   def join_instances( record )
-      @job.write_output( "Processing record : #{record.id}" ) 
-  
-      grouped_instances = case record
+     joined = false # we haven't done anything yet.. 
+     grouped_instances = case record
                     when Resource 
                       Instance.filter(:resource_id => record.id ).select_hash_groups(:instance_type_id, :id).values
                     else
@@ -38,25 +37,20 @@ class InstanceJoinerRunner < JobRunner
             instances2delete << container.instance_id
           
           end
-            
+           
           master.save 
           
           Container.filter(:id => containers2delete).delete 
           Instance.filter(:id => instances2delete).delete 
-
+          joined = true 
         end
       end
       
-      record.children.each do |child|
-        join_instances(child)
-      end
-  
+      joined
   end 
   
   def run
     super
-
-    job_data = @json.job
 
     begin
       DB.open( DB.supports_mvcc?, 
@@ -66,11 +60,31 @@ class InstanceJoinerRunner < JobRunner
                               :repo_id => @job.repo_id) do  
 
             @job.write_output( "Starting instance joiner job on repo : #{@job.repo_id}" ) 
+            updated_records = []  
             
-            Resource.filter(:repo_id => @job.repo_id).each do | resource | 
-              @job.write_output(" working on #{resource.id} ") 
-              join_instances(resource)
+            import_job_enum = EnumerationValue.filter(:value => "import_job").get(:id)
+            Job.filter( :job_type_id => import_job_enum, :repo_id => @job.repo_id ).select(:id).each do |j|
+              JobCreatedRecord.filter( :job_id => j.id ).select(:record_uri).each do |record|
+                target_record = nil 
+                parsed = JSONModel.parse_reference(record.record_uri)
+                case parsed[:type]
+                when "archival_object"
+                  target_record = ArchivalObject[parsed[:id].to_i]
+                when "resource" 
+                  target_record = Resource[parsed[:id].to_i] 
+                else
+                  next
+                end
+                
+                next unless target_record # sometimes records get deleted but their created record job row persists... 
+                
+                @job.write_output(" working on #{parsed[:type]} #{record.record_uri} ") 
+                joined = join_instances(target_record)
+                updated_records << record.record_uri if joined 
+              end
             end
+           
+            @job.record_created_uris(updated_records.uniq) 
 
           end 
         rescue Exception => e
